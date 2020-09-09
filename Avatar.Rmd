@@ -1,0 +1,260 @@
+---
+title: "Avatar"
+output: md_document
+---
+
+This explore the data from tidytuesday challenge that can be found in:
+
+[Avatar](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-08-11/readme.md)
+
+
+We first reqd the data of the challenge, and we use the two packages (tidyverse, tidytext), the first package for manipulating the data and the second for texts handling:
+
+
+```{r}
+knitr::opts_chunk$set(message = FALSE)
+library(tidyverse)
+library(tidytext)
+
+tuesdata <- tidytuesdayR::tt_load(2020, week = 33)
+```
+
+Show the columns of the avatar table
+
+```{r}
+
+
+tuesdata$avatar %>% head() %>% glimpse()
+
+
+```
+
+The scene description columns
+```{r}
+
+
+tuesdata$scene_description %>% head() %>% glimpse()
+
+
+```
+
+
+```{r}
+
+
+   tuesdata$avatar %>% knitr::kable()
+```
+
+get the number of chapter lines for forfo every book, in addition to the imdb_rating average for every book:
+
+```{r}
+   tuesdata$avatar %>% group_by(book) %>% summarise( n = n(), rating = mean(imdb_rating, na.rm = T)) %>% knitr::kable()
+```
+Group by chapter and calculate the average of imdb_rating, and maximum of chapter number:
+
+```{r}
+   tuesdata$avatar %>% group_by(writer,book) %>% summarise( max = max(chapter_num) , rating = mean(imdb_rating, na.rm = T)) %>% knitr::kable()
+```
+
+
+```{r}
+   tuesdata$avatar %>% group_by(id) %>% summarise( max = max(chapter_num) , rating = mean(imdb_rating, na.rm = T)) %>% knitr::kable()
+```
+Plot imdb_rating average for every book:
+
+```{r}
+   tuesdata$avatar %>% group_by(book) %>% summarize( rating = mean(imdb_rating, na.rm = T) ) %>% ungroup() %>% ggplot() + 
+  aes(x = book, y = rating) + geom_point()
+```
+
+plot number of lines for every chapter , splitted by book name
+
+```{r}
+   tuesdata$avatar  %>% group_by(book,chapter) %>% summarise( count =n() ) %>%  ggplot() + 
+     aes(x = chapter, y = count) + 
+     geom_point() +
+     facet_wrap( ~book )
+```
+Use bar plot with colors
+
+```{r}
+tuesdata$avatar  %>% group_by(book,chapter) %>% 
+   summarise( count  = n()  ) %>% 
+   arrange(  desc(count) ) %>% 
+   ggplot( ) + 
+   aes(x = reorder(chapter, count) , y = count, fill = book) + 
+   geom_col( ) +
+   coord_flip() +
+   facet_wrap( ~book )
+
+
+```
+
+
+the same plot for the average of imdb_rate
+
+```{r}
+tuesdata$avatar  %>% group_by(book,chapter) %>% 
+   summarise( imdb_rating  = mean(imdb_rating)  ) %>% 
+   arrange(  desc(imdb_rating) ) %>% 
+   ggplot( ) + 
+   aes(x = reorder(chapter, imdb_rating) , y = imdb_rating, fill = book) + 
+   geom_col( ) +
+   coord_flip() +
+   facet_wrap( ~book )
+
+
+```
+
+
+calculate the positive and negative sentiments for every chapter
+
+
+```{r}
+
+
+avatar_metrics <- tuesdata$avatar  %>% unnest_tokens(word, full_text) %>% 
+   anti_join( get_stopwords(), by = "word") %>% 
+   inner_join( get_sentiments("bing") %>%
+   filter(sentiment == "positive"), by = "word") %>% 
+   group_by(book,chapter) %>% 
+   summarise( imdb_rating  = mean(imdb_rating), positive = n()  ) %>% 
+   arrange(  desc(imdb_rating) ) %>% 
+ 
+   inner_join(
+   tuesdata$avatar  %>% unnest_tokens(word, full_text) %>% 
+      anti_join( get_stopwords(), by = "word") %>% 
+      inner_join( get_sentiments("bing") %>%
+      filter(sentiment == "negative") , by = "word") %>% 
+      group_by(book,chapter) %>% 
+      summarise( imdb_rating  = mean(imdb_rating), negative = n()  ) %>% 
+      arrange(  desc(imdb_rating) ) , by = c( "chapter", "book", "imdb_rating" ) )
+
+
+
+
+avatar_metrics %>% knitr::kable()
+ 
+
+
+```
+
+
+
+
+compare positive and negative for chapters by using bar plots, side by side for negative and positive sentiments:
+
+
+```{r}
+
+avatar_metrics %>%  ggplot() +                                                                   
+  geom_bar(aes(x=reorder(chapter, imdb_rating), y=positive   ), fill="#59ABE3", stat="identity") +      
+  geom_bar(aes(x=reorder(chapter, imdb_rating), y=-negative ), fill="#E66551", stat="identity") +     
+  coord_flip() +
+   theme_bw() +                                                                  
+   ylab("Positve/Negative") 
+
+
+avatar_metrics %>%  ggplot() +                                                                   
+  geom_bar(aes(x=reorder(chapter, imdb_rating), y=positive   ), fill="#59ABE3", stat="identity") +      
+  geom_bar(aes(x=reorder(chapter, imdb_rating), y=-negative ), fill="#E66551", stat="identity") +     
+  coord_flip() +
+  facet_wrap( ~book ) +
+   theme_bw() +                                                                  
+   ylab("Positve/Negative") 
+
+```
+
+
+
+Add more metrics, like number of stopwords, number of total words:
+```{r}
+
+
+
+avatar_metrics <- tuesdata$avatar %>% unnest_tokens(word, full_text) %>% 
+   anti_join( get_stopwords(), by = "word") %>% 
+   inner_join( get_sentiments("bing") %>%
+   filter(sentiment == "positive"), by = "word") %>% 
+    dplyr::group_by(book,chapter) %>% 
+    dplyr::summarise( imdb_rating  = mean(imdb_rating), positive = n()  ) %>% 
+   arrange(  desc(imdb_rating) ) %>% 
+ 
+   inner_join(
+   tuesdata$avatar %>% unnest_tokens(word, full_text) %>% 
+      anti_join( get_stopwords(), by = "word") %>% 
+      inner_join( get_sentiments("bing") %>%
+      filter(sentiment == "negative") , by = "word") %>% 
+       dplyr::group_by(book,chapter) %>% 
+       dplyr::summarise( imdb_rating  = mean(imdb_rating), negative = n()  ) %>% 
+      arrange(  desc(imdb_rating) ) , by = c( "chapter", "book", "imdb_rating" ) ) %>% 
+   
+   inner_join(
+
+
+ tuesdata$avatar %>% unnest_tokens(word, full_text) %>% 
+   inner_join( get_stopwords(), by = "word") %>% 
+   dplyr::group_by(book,chapter) %>% 
+   dplyr::summarise(  number_stop_words = dplyr::n() ) %>% 
+   inner_join(
+
+
+    tuesdata$avatar %>% 
+       unnest_tokens(word, full_text)  %>% 
+       dplyr::group_by(book,chapter) %>% 
+      dplyr::summarise( imdb_rating  = mean(imdb_rating), number_words = n()  ) %>% 
+      arrange(  desc(imdb_rating) ), by = c("chapter","book") ) ) %>% 
+     ungroup() %>% 
+     filter(imdb_rating > 9.3)
+
+avatar_metrics %>% knitr::kable()
+
+
+row.names(avatar_metrics) = avatar_metrics$chapter
+
+
+
+```
+
+
+
+
+Plot some radar plots to compare the chapters with different calculated metrics, we limit to theb top chapters on imdb_rating metric:
+
+```{r}
+
+mtcarsscaled <- avatar_metrics %>% 
+   select(-chapter,-book) %>%  
+   lapply( ggplot2:::rescale01) %>% as.data.frame()
+mtcarsscaled$model <- avatar_metrics  %>% rownames()
+mtcarsmelted <- mtcarsscaled %>% reshape2::melt()
+
+coord_radar <- function (theta = "x", start = 0, direction = 1) 
+{
+    theta <- match.arg(theta, c("x", "y"))
+    r <- if (theta == "x") 
+        "y"
+    else "x"
+    ggproto("CordRadar", CoordPolar, theta = theta, r = r, start = start, 
+        direction = sign(direction),
+        is_linear = function(coord) TRUE)
+}
+
+mtcarsmelted %>% ggplot( ) +
+  aes(x = variable, y = value) +
+  geom_polygon(aes(group = model, color = model), fill = NA, size = 0.5, show.legend = FALSE) +
+  geom_line(aes(group = model, color = model), size = 0.5) +
+  theme(strip.text.x = element_text(size = rel(0.8)),
+        axis.text.x = element_text(size = rel(0.8)),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab("") + ylab("") +
+  guides(color = guide_legend(ncol=1)) +
+  coord_radar()
+
+```
+
+
+
+
+
